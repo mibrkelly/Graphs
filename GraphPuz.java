@@ -6,10 +6,7 @@ import java.awt.Graphics;
 import java.awt.Color;
 import java.util.Random;
 
-public class GraphPuz implements PixelDrawer {
-	
-	private int level;
-	
+public class GraphPuz implements PixelDrawer {	
 	private int width;
 	private int height;
 	
@@ -17,9 +14,6 @@ public class GraphPuz implements PixelDrawer {
 	protected Pieces moving;
 	protected int[][] edges;
 	protected boolean selectedMode;
-	protected boolean checkingMode;
-	protected int selected;
-	protected int numInputs;
 	
 	public GraphPuz(int w, int h) {
 		width = w;
@@ -44,44 +38,80 @@ public class GraphPuz implements PixelDrawer {
 		
 		moving = null;
 		selectedMode = false;
-		selected = -1;
-		checkingMode = false;
 	}
 	
-	public void update() {
-		boolean[] added = new boolean[pieces.length];
+	//***********************************************//
+	//The following methods update the graph         //
+	//***********************************************//
+	
+	public void selectComponent() {
 		for (int i = 0; i < pieces.length; i++) {
-			added[i] = false;
+			if (pieces[i] != null && pieces[i].selected) {
+				branchNeighbors(i);
+			}
 		}
-		int countAdded = 0;
-		int lastCount = -1;
-		while (countAdded != lastCount) {
-			lastCount = countAdded;
-			for (int i = 0; i < pieces.length; i++) {
-				if (!added[i]) {
-					boolean addNow = true;
-					for (int j = 0; j < pieces.length; j++) {
-						if (!added[j] && edges[j][i] > -1) {
-							addNow = false;
-						}
-					}
-					if (addNow) {
-						added[i] = true;
-						countAdded++;
-						int j = 0;
-						numInputs = 1;
-						while (numInputs > 0 && j < pieces.length) {
-							if (edges[j][i] > -1) {
-								numInputs--;
-								pieces[i].inputs = pieces[j].getOut();
-								edges[j][i] = pieces[j].getOut();
-							}
-							j++;
-						}
-					}
+	}
+	public void branchNeighbors (int rootNode) {
+		for (int i = 0; i < pieces.length; i++) {
+			if (i != rootNode && (edges[rootNode][i] != -1) || (edges[i][rootNode] != -1)) {
+				if (!pieces[i].selected) {
+					pieces[i].selected = true;
+					branchNeighbors(i);
 				}
 			}
 		}
+	}
+	
+	public void removeVertex() {
+		for (int i = 0; i < pieces.length; i++) {
+			if (pieces[i] != null && pieces[i].selected) {
+				for (int j = 0; j < pieces.length; j++) {
+					edges[j][i] = -1;
+					edges[i][j] = -1;
+				}
+				pieces[i] = null;
+			}
+		}
+		selectedMode = false;
+	}
+	
+	public void addVertex() {
+		for (int i = 0; i < pieces.length; i++) {
+			if (pieces[i] == null) {
+				pieces[i] = new GraphPiece(1030,100+(10*i)%460);
+				return;
+			}
+		}
+		Pieces[] piecesOld = new Pieces[pieces.length];
+		int[][] edgesOld = new int[pieces.length][pieces.length];
+		for (int i = 0; i < pieces.length; i++) {
+			piecesOld[i] = pieces[i];
+			for (int j = 0; j < pieces.length; j++) {
+				edgesOld[i][j] = edges[i][j];
+			}
+		}
+		pieces = new Pieces[piecesOld.length+5];
+		edges = new int[pieces.length][pieces.length];
+		for (int i = 0; i < pieces.length-5; i++) {
+			pieces[i] = piecesOld[i];
+		}
+		
+		for (int i = 0; i < pieces.length; i++) {
+			if (i < pieces.length-5) {
+				for (int j = 0; j < pieces.length-5; j++) {
+					edges[i][j] = edgesOld[i][j];
+				}
+				for (int j = pieces.length-5; j < pieces.length; j++) {
+					edges[i][j] = -1;
+				}
+			}
+			else {
+				for (int j = 0; j < pieces.length; j++) {
+					edges[i][j] = -1;
+				}
+			}
+		}
+		pieces[pieces.length-5] = new GraphPiece(1030,100);
 	}
 	
 	//***********************************************//
@@ -89,7 +119,10 @@ public class GraphPuz implements PixelDrawer {
 	//***********************************************//
 	
 	public void render(int keepTime) {
-		Square(50,50,1080,550,0x000000);
+		Square(50,50,1080,550,0x000000); //Background
+		Square(730,20,100,30,0x333333); //Component
+		Square(880,20,100,30,0x333333); //Delete
+		Square(1030,20,100,30,0x333333); //New
 		for (int i = 0; i < pieces.length; i++) {
 			for (int j = 0; j < pieces.length; j++) {
 				if (edges[i][j] != -1) {
@@ -99,7 +132,8 @@ public class GraphPuz implements PixelDrawer {
 		}
 		
 		for (int i = 0; i < pieces.length; i++) {
-			pieces[i].draw();
+			if (pieces[i] != null)
+				pieces[i].draw();
 		}
 	}
 	
@@ -112,6 +146,12 @@ public class GraphPuz implements PixelDrawer {
 		g.drawString("Drag the vertices with your mouse to move them around.",100,100);
 		g.drawString("Click one vertex then another to connect them with an edge.",100,120);
 		g.drawString("Click a vertex twice to remove all edges from it.",100,140);
+		
+		if (selectedMode) {
+			g.drawString("Delete",884,42);
+			g.drawString("Component",734,42);
+		}
+		g.drawString("New Vertex",1034,42);
 	}
 	
 	public void Square (int x, int y, int w, int h, int color) {
@@ -129,13 +169,11 @@ public class GraphPuz implements PixelDrawer {
 			t = (double)i/1500;
 			double x = (double)x0*(1-t)+(double)x1*t;
 			double y = (double)y0*(1-t)+(double)y1*t;
-			//if (x < 1100 & x > 100 && y < 600 && y > 50) {
-				pix[(int)x][(int)y] = color;
-				pix[(int)x+1][(int)y] = color;
-				pix[(int)x-1][(int)y] = color;
-				pix[(int)x][(int)y+1] = color;
-				pix[(int)x][(int)y-1] = color;
-			//}
+			pix[(int)x][(int)y] = color;
+			pix[(int)x+1][(int)y] = color;
+			pix[(int)x-1][(int)y] = color;
+			pix[(int)x][(int)y+1] = color;
+			pix[(int)x][(int)y-1] = color;
 		}
 	}
 	
@@ -144,38 +182,76 @@ public class GraphPuz implements PixelDrawer {
 	//***********************************************//
 	
 	public boolean clickedAt(int x, int y) {
-		if ((1050 < x && x < 1150 && 530 < y && y < 560) || (1050 < x && x < 1150 && 490 < y && y < 520)) {
-			return true;
+		if (20 < y && y < 50) {
+			if (selectedMode) {
+				if (730 < x && x < 830) {
+					selectComponent();
+				}
+				if (880 < x && x < 980) {
+					removeVertex();
+				}
+			}
+			if (1030 < x && x < 1130) {
+				addVertex();
+			}
 		}
-		if (selectedMode) {
+		
+		
+		else if (selectedMode) {
 			for (int i = 0; i < pieces.length; i++) {
-				if (pieces[i].getX() < x && pieces[i].getX()+30 > x && pieces[i].getY() < y && pieces[i].getY()+30 > y && edges[i][selected] == -1) {
-					if (pieces[i] == pieces[selected]) {
-						for (int j = 0; j < pieces.length; j++) {
-							edges[j][selected] = -1;
-							edges[selected][j] = -1;
+				if (pieces[i] != null && pieces[i].getX() < x && pieces[i].getX()+30 > x && pieces[i].getY() < y && pieces[i].getY()+30 > y) {
+					if (pieces[i].selected) {
+						for (int k = 0; k < pieces.length; k++) {
+							edges[k][i] = -1;
+							edges[i][k] = -1;
 						}
-						pieces[selected].inputs = 0x00ff00;
-						selectedMode = false;
-						return false;
 					}
-					edges[i][selected] = 0;
-					numInputs--;
-					if (numInputs <= 0) {
-						pieces[selected].inputs = 0x00ff00;
-						selectedMode = false;
-						update();
-						return false;
+					else {
+						for (int j = 0; j < pieces.length; j++) {
+							if (pieces[j] != null && pieces[j].selected) {
+								edges[i][j] = 0;
+							}
+						}
 					}
 				}
 			}
-		}
-		if (!selectedMode && !checkingMode) {
 			for (int i = 0; i < pieces.length; i++) {
-				if (pieces[i].getX() < x && pieces[i].getX()+30 > x && pieces[i].getY() < y && pieces[i].getY()+30 > y && pieces[i].getChangable()) {
-					pieces[i].inputs = 0x0000ff;
-					selected = i;
-					numInputs = 1;
+				if (pieces[i] != null && pieces[i].selected) {
+					pieces[i].selected = false;
+				}
+			}
+			selectedMode = false;
+			
+			
+			/*
+			for (int i = 0; i < pieces.length; i++) {
+				if (pieces[i] != null && pieces[i].selected) {
+					for (int j = 0; j < pieces.length; j++) {
+						if (pieces[j] != null && pieces[j].getX() < x && pieces[j].getX()+30 > x && pieces[j].getY() < y && pieces[j].getY()+30 > y && edges[j][i] == -1) {
+							if (pieces[j] == pieces[i]) {
+								for (int k = 0; k < pieces.length; k++) {
+									edges[k][i] = -1;
+									edges[i][k] = -1;
+								}
+								pieces[i].selected = false;
+								selectedMode = false;
+								return false;
+							}
+							else {
+								edges[j][i] = 0;
+								pieces[i].selected = false;
+								selectedMode = false;
+								return false;
+							}
+						}
+					}
+				}
+			}*/
+		}
+		else if (!selectedMode) {
+			for (int i = 0; i < pieces.length; i++) {
+				if (pieces[i] != null && pieces[i].getX() < x && pieces[i].getX()+30 > x && pieces[i].getY() < y && pieces[i].getY()+30 > y && pieces[i].getChangable()) {
+					pieces[i].selected = true;
 					selectedMode = true;
 				}
 			}
@@ -184,9 +260,9 @@ public class GraphPuz implements PixelDrawer {
 	}
 	
 	public void pressedAt(int x, int y) {
-		if (!selectedMode && !checkingMode) {
+		if (!selectedMode) {
 			for (int i = 0; i < pieces.length; i++) {
-				if (pieces[i].getX() < x && pieces[i].getX()+30 > x && pieces[i].getY() < y && pieces[i].getY()+30 > y) {
+				if (pieces[i] != null && pieces[i].getX() < x && pieces[i].getX()+30 > x && pieces[i].getY() < y && pieces[i].getY()+30 > y) {
 					if (pieces[i].getChangable()) {
 						moving = pieces[i];
 						break;

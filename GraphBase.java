@@ -20,14 +20,14 @@ public class GraphBase extends Canvas implements Runnable, PixelDrawer {
 	public static int height = 650;
 	public static String title = "Game";
 	private boolean running = false;
-	private boolean keyIn = true;
-	private boolean mouseIn = true;
 	private int updates;
 	
 	private Thread thread;
 	private JFrame frame;
 	
+	private boolean mouseIn = true;
 	private Mouse mouse;
+	
 	private GraphPuz currState;
 	
 	private BufferedImage image = new BufferedImage(width,height,BufferedImage.TYPE_INT_RGB);
