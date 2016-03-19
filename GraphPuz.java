@@ -15,6 +15,14 @@ public class GraphPuz implements PixelDrawer {
 	protected int[][] edges;
 	protected boolean selectedMode;
 	
+	private String graphDiameter = "";
+	private String graphHamiltonian = "";
+	
+	
+	private int componentX = 0;
+	private int componentY = 0;
+	private boolean[] currentComponent;
+	
 	public GraphPuz(int w, int h) {
 		width = w;
 		height = h;
@@ -27,12 +35,16 @@ public class GraphPuz implements PixelDrawer {
 		pieces[3] = new GraphPiece(450,350);
 		pieces[4] = new GraphPiece(550,350);
 		
+		currentComponent = new boolean[pieces.length];
+		for (int i = 0; i < pieces.length; i++) {
+			currentComponent[i] = false;
+		}
 		
 		edges = new int[numPieces][numPieces];
 		
 		for (int i = 0; i < numPieces; i++) {
 			for (int j = 0; j < numPieces; j++) {
-				edges[i][j] = -1;
+				edges[i][j] = 0;
 			}
 		}
 		
@@ -46,16 +58,23 @@ public class GraphPuz implements PixelDrawer {
 	
 	public void selectComponent() {
 		for (int i = 0; i < pieces.length; i++) {
-			if (pieces[i] != null && pieces[i].selected) {
-				branchNeighbors(i);
-			}
+			if (pieces[i] != null)
+				pieces[i].selected = currentComponent[i];
 		}
+	}
+	
+	public void findCurrentComponent (int rootNode) {
+		for (int i = 0; i < currentComponent.length; i++) {
+			currentComponent[i] = false;
+		}
+		currentComponent[rootNode] = true;
+		branchNeighbors(rootNode);
 	}
 	public void branchNeighbors (int rootNode) {
 		for (int i = 0; i < pieces.length; i++) {
-			if (i != rootNode && (edges[rootNode][i] != -1) || (edges[i][rootNode] != -1)) {
-				if (!pieces[i].selected) {
-					pieces[i].selected = true;
+			if (i != rootNode && (edges[rootNode][i] != 0) || (edges[i][rootNode] != 0)) {
+				if (!currentComponent[i]) {
+					currentComponent[i] = true;
 					branchNeighbors(i);
 				}
 			}
@@ -66,10 +85,11 @@ public class GraphPuz implements PixelDrawer {
 		for (int i = 0; i < pieces.length; i++) {
 			if (pieces[i] != null && pieces[i].selected) {
 				for (int j = 0; j < pieces.length; j++) {
-					edges[j][i] = -1;
-					edges[i][j] = -1;
+					edges[j][i] = 0;
+					edges[i][j] = 0;
 				}
 				pieces[i] = null;
+				currentComponent[i] = false;
 			}
 		}
 		selectedMode = false;
@@ -84,17 +104,22 @@ public class GraphPuz implements PixelDrawer {
 		}
 		Pieces[] piecesOld = new Pieces[pieces.length];
 		int[][] edgesOld = new int[pieces.length][pieces.length];
+		boolean[] componentOld = new boolean[currentComponent.length];
 		for (int i = 0; i < pieces.length; i++) {
 			piecesOld[i] = pieces[i];
 			for (int j = 0; j < pieces.length; j++) {
 				edgesOld[i][j] = edges[i][j];
 			}
+			componentOld[i] = currentComponent[i];
 		}
 		pieces = new Pieces[piecesOld.length+5];
 		edges = new int[pieces.length][pieces.length];
+		currentComponent = new boolean[pieces.length];
 		for (int i = 0; i < pieces.length-5; i++) {
 			pieces[i] = piecesOld[i];
+			currentComponent[i] = componentOld[i];
 		}
+		
 		
 		for (int i = 0; i < pieces.length; i++) {
 			if (i < pieces.length-5) {
@@ -102,12 +127,12 @@ public class GraphPuz implements PixelDrawer {
 					edges[i][j] = edgesOld[i][j];
 				}
 				for (int j = pieces.length-5; j < pieces.length; j++) {
-					edges[i][j] = -1;
+					edges[i][j] = 0;
 				}
 			}
 			else {
 				for (int j = 0; j < pieces.length; j++) {
-					edges[i][j] = -1;
+					edges[i][j] = 0;
 				}
 			}
 		}
@@ -125,7 +150,7 @@ public class GraphPuz implements PixelDrawer {
 		Square(1030,20,100,30,0x333333); //New
 		for (int i = 0; i < pieces.length; i++) {
 			for (int j = 0; j < pieces.length; j++) {
-				if (edges[i][j] != -1) {
+				if (edges[i][j] != 0) {
 					drawLn(pieces[j].getX()+15,pieces[j].getY()+15,pieces[i].getX()+15,pieces[i].getY()+15,0xffffff);
 				}
 			}
@@ -152,6 +177,13 @@ public class GraphPuz implements PixelDrawer {
 			g.drawString("Component",734,42);
 		}
 		g.drawString("New Vertex",1034,42);
+		
+		Color textBackground = new Color(255,255,255,50);
+		g.setColor(textBackground);
+		g.fillRect(componentX-5, componentY-20, 150, 50);
+		g.setColor(Color.RED);
+		g.drawString(graphDiameter, componentX, componentY);
+		g.drawString(graphHamiltonian, componentX, componentY+15);
 	}
 	
 	public void Square (int x, int y, int w, int h, int color) {
@@ -181,7 +213,7 @@ public class GraphPuz implements PixelDrawer {
 	//This following methods handle the mouse input  //
 	//***********************************************//
 	
-	public boolean clickedAt(int x, int y) {
+	public void clickedAt(int x, int y) {
 		if (20 < y && y < 50) {
 			if (selectedMode) {
 				if (730 < x && x < 830) {
@@ -196,22 +228,24 @@ public class GraphPuz implements PixelDrawer {
 			}
 		}
 		
-		
 		else if (selectedMode) {
 			for (int i = 0; i < pieces.length; i++) {
 				if (pieces[i] != null && pieces[i].getX() < x && pieces[i].getX()+30 > x && pieces[i].getY() < y && pieces[i].getY()+30 > y) {
 					if (pieces[i].selected) {
 						for (int k = 0; k < pieces.length; k++) {
-							edges[k][i] = -1;
-							edges[i][k] = -1;
+							edges[k][i] = 0;
+							edges[i][k] = 0;
 						}
+						findCurrentComponent(i);
 					}
 					else {
 						for (int j = 0; j < pieces.length; j++) {
 							if (pieces[j] != null && pieces[j].selected) {
-								edges[i][j] = 0;
+								edges[i][j] = 1;
+								edges[j][i] = 1;
 							}
 						}
+						findCurrentComponent(i);
 					}
 				}
 			}
@@ -221,42 +255,21 @@ public class GraphPuz implements PixelDrawer {
 				}
 			}
 			selectedMode = false;
-			
-			
-			/*
-			for (int i = 0; i < pieces.length; i++) {
-				if (pieces[i] != null && pieces[i].selected) {
-					for (int j = 0; j < pieces.length; j++) {
-						if (pieces[j] != null && pieces[j].getX() < x && pieces[j].getX()+30 > x && pieces[j].getY() < y && pieces[j].getY()+30 > y && edges[j][i] == -1) {
-							if (pieces[j] == pieces[i]) {
-								for (int k = 0; k < pieces.length; k++) {
-									edges[k][i] = -1;
-									edges[i][k] = -1;
-								}
-								pieces[i].selected = false;
-								selectedMode = false;
-								return false;
-							}
-							else {
-								edges[j][i] = 0;
-								pieces[i].selected = false;
-								selectedMode = false;
-								return false;
-							}
-						}
-					}
-				}
-			}*/
 		}
 		else if (!selectedMode) {
 			for (int i = 0; i < pieces.length; i++) {
 				if (pieces[i] != null && pieces[i].getX() < x && pieces[i].getX()+30 > x && pieces[i].getY() < y && pieces[i].getY()+30 > y && pieces[i].getChangable()) {
 					pieces[i].selected = true;
 					selectedMode = true;
+					findCurrentComponent(i);
 				}
 			}
 		}
-		return false;
+		graphDiameter = "Diameter " + computeDiameter();
+		if (computeHamiltonian())
+			graphHamiltonian = "Hamiltonian";
+		else
+			graphHamiltonian = "non-Hamiltonian";
 	}
 	
 	public void pressedAt(int x, int y) {
@@ -293,4 +306,118 @@ public class GraphPuz implements PixelDrawer {
 	public void released() {
 		moving = null;
 	}
+	
+	//***********************************************//
+	//The following methods gather graph data        //
+	//***********************************************//
+	
+	public void update() {
+		coordinateData();
+	}
+	
+	public void coordinateData() {
+		double xCenter = 0;
+		double yCenter = 0;
+		double numberOfCurrent = 0;
+		for (int i = 0; i < pieces.length; i++) {
+			if (currentComponent[i]) {
+				xCenter += pieces[i].getX();
+				yCenter += pieces[i].getY();
+				numberOfCurrent += 1;
+			}
+		}
+		componentX = (int)(xCenter/numberOfCurrent);
+		componentY = (int)(yCenter/numberOfCurrent);
+	}
+	
+	public boolean computeHamiltonian() {
+		boolean isHamiltonian = true;
+		for (int i = 0; i < edges.length; i++) {
+			int count = 0;
+			for (int j = 0; j < edges.length; j++) {
+				count += edges[i][j];
+			}
+			if (count % 2 == 1)
+				isHamiltonian = false;
+		}
+		return isHamiltonian;
+	}
+	
+	public int computeDiameter() {
+		int[][] edgesPower = new int[edges.length][edges.length];
+		int[][] edgesSum = new int[edges.length][edges.length];
+		for (int i = 0; i < edges.length; i++) {
+			for (int j = 0; j < edges.length; j++) {
+				if (i == j)
+					edgesPower[i][j] = 1;
+				else
+					edgesPower[i][j] = 0;
+				edgesSum[i][j] = 0;
+			}
+		}
+		
+		int diameter = -1;
+		boolean done;
+		do {
+			diameter++;
+			done = true;
+			for (int i = 0; i < edges.length; i++) {
+				for (int j = 0; j < edges.length; j++) {
+					if (currentComponent[i] && currentComponent[j] && edgesSum[i][j] == 0 && i != j) {
+						done = false;
+					}
+				}
+			}
+			if (!done) {
+				edgesPower = multiplyMatrix(edgesPower, edges);
+				edgesSum = sumMatrix(edgesSum,edgesPower);
+			}
+		} while (!done);
+		
+		return diameter;
+	}
+	
+	public int[][] multiplyMatrix(int[][] mtx1, int[][] mtx2) {
+		if (mtx1[0].length != mtx2.length) {
+			return null;
+		}
+		int[][] product = new int[mtx1.length][mtx2[0].length];
+		for (int i = 0; i < product.length; i++) {
+			for (int j = 0; j < product[0].length; j++) {
+				product[i][j] = 0;
+			}
+		}
+		for (int i = 0; i < mtx1.length; i++) {
+			for (int j = 0; j < mtx2[0].length; j++) {
+				for (int k = 0; k < mtx1[0].length; k++) {
+					product[i][j] += mtx1[i][k]*mtx2[k][j];
+				}
+			}
+		}
+		return product;
+	}
+	
+	public int[][] sumMatrix(int[][] mtx1, int[][] mtx2) {
+		if ((mtx1.length != mtx2.length) || (mtx1[0].length != mtx2[0].length)) {
+			return null;
+		}
+		int[][] sum = new int[mtx1.length][mtx1[0].length];
+		for (int i = 0; i < mtx1.length; i++) {
+			for (int j = 0; j < mtx2[0].length; j++) {
+				sum[i][j] = mtx1[i][j] + mtx2[i][j];
+			}
+		}
+		return sum;
+	}
+	
+	/*
+	public void printMatrix(int[][] mtx) {
+		for (int i = 0; i < mtx.length; i++) {
+			for (int j = 0; j < mtx.length; j++) {
+				System.out.print(mtx[i][j] + " ");
+			}
+			System.out.println();
+		}
+		System.out.println();
+	}*/
 }
